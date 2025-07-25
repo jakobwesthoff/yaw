@@ -46,5 +46,6 @@ jobs:
         with:
           bin: yaw
           target: ${{ matrix.target }}
+          archive: yaw-$tag-$target
           token: ${{ secrets.GITHUB_TOKEN }}
 
