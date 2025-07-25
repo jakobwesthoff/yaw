@@ -54,6 +54,15 @@ Prebuilt binaries are available on the [GitHub releases page](https://github.com
 - **Windows**: 
   - x86_64 (x86_64-pc-windows-msvc)
 
+### Homebrew
+
+```bash
+brew tap jakobwesthoff/yaw https://github.com/jakobwesthoff/yaw
+brew install jakobwesthoff/yaw/yaw
+```
+
+**Note:** This will build from source using Cargo, which requires Rust to be installed. For faster installation, consider downloading prebuilt binaries from the releases page above.
+
 ### Build from Source
 
 ```bash
