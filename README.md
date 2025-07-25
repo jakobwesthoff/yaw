@@ -1,4 +1,4 @@
-# yaw - **YA**ML **w**ithout YAML Editor
+# yaw - YAml Without yaml editor
 
 A lightweight command-line utility that transforms YAML editing by converting files to JSON format for easier editing, then converting them back to YAML. Key ordering is preserved throughout the process.
 
