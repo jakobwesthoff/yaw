@@ -49,3 +49,14 @@ jobs:
           archive: yaw-$tag-$target
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  update-homebrew:
+    needs: upload-assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: yaw
+          homebrew-tap: jakobwesthoff/yaw
+          formula-path: Formula/yaw.rb
+        env:
+          COMMITTER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
