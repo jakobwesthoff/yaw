@@ -1,6 +1,6 @@
 [package]
-name = "yam"
-version = "0.1.0"
+name = "yaw"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
@@ -9,3 +9,11 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.141", features = ["preserve_order"] }
 serde_yaml = "0.9.34"
 tempfile = "3.20.0"
+thiserror = "2.0.12"
+
+[profile.release]
+codegen-units = 1 # Allows LLVM to perform better optimization.
+lto = true        # Enables link-time-optimizations.
+opt-level = 3     # "s" prioritizes small binary size. Use `3` if you prefer speed.
+panic = "abort"   # Higher performance by disabling panic handlers.
+strip = true      # Ensures debug symbols are removed.
