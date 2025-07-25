@@ -39,7 +39,22 @@ Running `yaw database.yaml` opens this JSON in your editor:
 
 After editing and saving, it's converted back to YAML with preserved ordering.
 
-## Build
+## Installation
+
+### Prebuilt Binaries
+
+Prebuilt binaries are available on the [GitHub releases page](https://github.com/jakobwesthoff/yaw/releases) for the following platforms:
+
+- **macOS**: 
+  - Apple Silicon (aarch64-apple-darwin)
+  - Intel (x86_64-apple-darwin)
+- **Linux**: 
+  - x86_64 (x86_64-unknown-linux-musl, statically linked)
+  - ARM64 (aarch64-unknown-linux-musl, statically linked)
+- **Windows**: 
+  - x86_64 (x86_64-pc-windows-msvc)
+
+### Build from Source
 
 ```bash
 cargo build --release
