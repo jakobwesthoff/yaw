@@ -8,6 +8,7 @@ YAML's strict indentation requirements can be frustrating, particularly when wor
 
 ## Usage
 
+### File Mode
 ```bash
 yaw config.yaml
 ```
@@ -17,6 +18,14 @@ This will:
 2. Open it in your configured editor (`$EDITOR`)
 3. Convert your edited JSON back to YAML preserving key order
 4. Save the result to the original file
+
+### Pipeline Mode
+```bash
+cat config.yaml | yaw > edited.yaml
+echo "key: value" | yaw | some-other-tool
+```
+
+When no file is provided, yaw reads YAML from stdin and outputs the edited YAML to stdout, making it perfect for Unix pipelines.
 
 ### Example
 
