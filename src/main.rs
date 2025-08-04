@@ -4,30 +4,38 @@ use std::path::PathBuf;
 use std::process;
 
 use clap::Parser;
-use editor::{YamlEditor, YamlEditorError};
+use editor::YamlEditor;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// The YAML file to edit
+    /// The YAML file to edit (reads from stdin if not provided)
     #[arg(value_name = "FILE")]
-    yaml_file: PathBuf,
+    yaml_file: Option<PathBuf>,
 }
 
 fn main() {
     let cli = Cli::parse();
 
-    match YamlEditor::new(&cli.yaml_file) {
-        Ok(editor) => match editor.edit() {
-            Ok(()) => println!("YAML file updated successfully"),
-            Err(YamlEditorError::NoChanges) => println!("No changes made"),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                process::exit(1);
+    let is_file_mode = cli.yaml_file.is_some();
+    let editor = match cli.yaml_file {
+        Some(file_path) => YamlEditor::from_file(file_path),
+        None => YamlEditor::from_stdin(),
+    };
+
+    match editor.edit() {
+        Ok(()) => {
+            if is_file_mode {
+                println!("YAML file updated successfully");
             }
-        },
+        }
+        Err(editor::YamlEditorError::NoChanges) => {
+            if is_file_mode {
+                println!("No changes made");
+            }
+        }
         Err(e) => {
-            eprintln!("Failed to open YAML file: {}", e);
+            eprintln!("Error: {}", e);
             process::exit(1);
         }
     }

@@ -1,10 +1,24 @@
 use std::fs;
-use std::io::{self, Write};
-use std::path::Path;
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use tempfile::NamedTempFile;
 use thiserror::Error;
+
+// InputSource cannot be cloned - stdin can only be read once
+#[derive(Debug)]
+pub enum InputSource {
+    File(PathBuf),
+    Stdin,
+}
+
+// OutputDestination can be cloned - files and stdout can be written to multiple times
+#[derive(Debug, Clone)]
+pub enum OutputDestination {
+    File(String),
+    Stdout,
+}
 
 #[derive(Error, Debug)]
 pub enum YamlEditorError {
@@ -22,18 +36,53 @@ pub enum YamlEditorError {
     FileIO(std::io::Error),
     #[error("No changes detected")]
     NoChanges,
+    #[error("Failed to read from stdin: {0}")]
+    StdinRead(std::io::Error),
+    #[error("Failed to write to stdout: {0}")]
+    StdoutWrite(std::io::Error),
+}
+
+fn read_input(source: &InputSource) -> Result<String, YamlEditorError> {
+    match source {
+        InputSource::File(path) => fs::read_to_string(path).map_err(YamlEditorError::FileIO),
+        InputSource::Stdin => {
+            let mut buffer = String::new();
+            io::stdin()
+                .read_to_string(&mut buffer)
+                .map_err(YamlEditorError::StdinRead)?;
+            Ok(buffer)
+        }
+    }
+}
+
+fn write_output(destination: &OutputDestination, content: &str) -> Result<(), YamlEditorError> {
+    match destination {
+        OutputDestination::File(path) => fs::write(path, content).map_err(YamlEditorError::FileIO),
+        OutputDestination::Stdout => {
+            print!("{}", content);
+            io::stdout().flush().map_err(YamlEditorError::StdoutWrite)?;
+            Ok(())
+        }
+    }
 }
 
 pub struct EditSession {
     temp_file: NamedTempFile,
-    file_path: String,
+    output_destination: OutputDestination,
+    original_content: Value,
 }
 
 impl EditSession {
-    pub fn new(file_path: String, content: &Value) -> Result<Self, YamlEditorError> {
+    pub fn new(
+        input_source: InputSource,
+        output_destination: OutputDestination,
+    ) -> Result<Self, YamlEditorError> {
+        // Read and parse YAML from input source
+        let yaml_content = read_input(&input_source)?;
+        let original_content: Value = serde_yaml::from_str(&yaml_content)?;
         // Convert YAML to pretty JSON
-        let json_content =
-            serde_json::to_string_pretty(content).map_err(YamlEditorError::JsonSerialization)?;
+        let json_content = serde_json::to_string_pretty(&original_content)
+            .map_err(YamlEditorError::JsonSerialization)?;
 
         // Create temporary file with .json extension for syntax highlighting
         let mut temp_file =
@@ -45,7 +94,8 @@ impl EditSession {
 
         Ok(Self {
             temp_file,
-            file_path,
+            output_destination,
+            original_content,
         })
     }
 
@@ -61,13 +111,17 @@ impl EditSession {
 
     pub fn save_yaml(&self, edited_value: &Value) -> Result<(), YamlEditorError> {
         let yaml_output = serde_yaml::to_string(edited_value)?;
-        fs::write(&self.file_path, yaml_output).map_err(YamlEditorError::FileIO)
+        write_output(&self.output_destination, &yaml_output)
+    }
+
+    pub fn has_changes(&self, edited_value: &Value) -> bool {
+        edited_value != &self.original_content
     }
 }
 
 pub struct YamlEditor {
-    file_path: String,
-    original_content: Value,
+    input_source: InputSource,
+    output_destination: OutputDestination,
 }
 
 fn display_json_error(err: &serde_json::Error) {
@@ -87,26 +141,35 @@ fn wait_for_keypress() -> Result<(), YamlEditorError> {
 }
 
 impl YamlEditor {
-    pub fn new<P: AsRef<Path>>(file_path: P) -> Result<Self, YamlEditorError> {
-        let file_path = file_path.as_ref().to_string_lossy().to_string();
-        let yaml_content = fs::read_to_string(&file_path).map_err(YamlEditorError::FileIO)?;
-        let original_content: Value = serde_yaml::from_str(&yaml_content)?;
-
-        Ok(Self {
-            file_path,
-            original_content,
-        })
+    pub fn new(input_source: InputSource, output_destination: OutputDestination) -> Self {
+        Self {
+            input_source,
+            output_destination,
+        }
     }
 
-    pub fn edit(&self) -> Result<(), YamlEditorError> {
-        let mut session = EditSession::new(self.file_path.clone(), &self.original_content)?;
+    pub fn from_file<P: AsRef<Path>>(file_path: P) -> Self {
+        let path = file_path.as_ref().to_path_buf();
+        let file_path_str = path.to_string_lossy().to_string();
+        Self::new(
+            InputSource::File(path),
+            OutputDestination::File(file_path_str),
+        )
+    }
+
+    pub fn from_stdin() -> Self {
+        Self::new(InputSource::Stdin, OutputDestination::Stdout)
+    }
+
+    pub fn edit(self) -> Result<(), YamlEditorError> {
+        let mut session = EditSession::new(self.input_source, self.output_destination)?;
 
         loop {
             session.edit()?;
 
             match session.try_parse_json() {
                 Ok(edited_value) => {
-                    if edited_value == self.original_content {
+                    if !session.has_changes(&edited_value) {
                         return Err(YamlEditorError::NoChanges);
                     }
                     return session.save_yaml(&edited_value);
