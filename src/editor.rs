@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::Path;
 
 use serde_json::Value;
@@ -13,7 +13,9 @@ pub enum YamlEditorError {
     #[error("Failed to create temporary file: {0}")]
     TempFile(std::io::Error),
     #[error("JSON serialization error: {0}")]
-    JsonSerialization(#[from] serde_json::Error),
+    JsonSerialization(serde_json::Error),
+    #[error("JSON deserialization error: {0}")]
+    JsonDeserialization(serde_json::Error),
     #[error("Editor execution failed: {0}")]
     EditorExecution(std::io::Error),
     #[error("File I/O error: {0}")]
@@ -22,9 +24,66 @@ pub enum YamlEditorError {
     NoChanges,
 }
 
+pub struct EditSession {
+    temp_file: NamedTempFile,
+    file_path: String,
+}
+
+impl EditSession {
+    pub fn new(file_path: String, content: &Value) -> Result<Self, YamlEditorError> {
+        // Convert YAML to pretty JSON
+        let json_content =
+            serde_json::to_string_pretty(content).map_err(YamlEditorError::JsonSerialization)?;
+
+        // Create temporary file with .json extension for syntax highlighting
+        let mut temp_file =
+            NamedTempFile::with_suffix(".json").map_err(YamlEditorError::TempFile)?;
+        temp_file
+            .write_all(json_content.as_bytes())
+            .map_err(YamlEditorError::TempFile)?;
+        temp_file.flush().map_err(YamlEditorError::TempFile)?;
+
+        Ok(Self {
+            temp_file,
+            file_path,
+        })
+    }
+
+    pub fn edit(&mut self) -> Result<(), YamlEditorError> {
+        edit::edit_file(self.temp_file.path()).map_err(YamlEditorError::EditorExecution)
+    }
+
+    pub fn try_parse_json(&self) -> Result<Value, YamlEditorError> {
+        let content =
+            fs::read_to_string(self.temp_file.path()).map_err(YamlEditorError::TempFile)?;
+        serde_json::from_str(&content).map_err(YamlEditorError::JsonDeserialization)
+    }
+
+    pub fn save_yaml(&self, edited_value: &Value) -> Result<(), YamlEditorError> {
+        let yaml_output = serde_yaml::to_string(edited_value)?;
+        fs::write(&self.file_path, yaml_output).map_err(YamlEditorError::FileIO)
+    }
+}
+
 pub struct YamlEditor {
     file_path: String,
     original_content: Value,
+}
+
+fn display_json_error(err: &serde_json::Error) {
+    eprintln!("There was an Error in your edited JSON document:");
+    eprintln!();
+    eprintln!("{}", err);
+    eprintln!();
+    eprintln!("Press any key to return to the editor and fix the issue...");
+}
+
+fn wait_for_keypress() -> Result<(), YamlEditorError> {
+    let mut input = String::new();
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(YamlEditorError::FileIO)?;
+    Ok(())
 }
 
 impl YamlEditor {
@@ -40,36 +99,25 @@ impl YamlEditor {
     }
 
     pub fn edit(&self) -> Result<(), YamlEditorError> {
-        // Convert YAML to pretty JSON
-        let json_content = serde_json::to_string_pretty(&self.original_content)?;
+        let mut session = EditSession::new(self.file_path.clone(), &self.original_content)?;
 
-        // Create temporary file with .json extension for syntax highlighting
-        let mut temp_file =
-            NamedTempFile::with_suffix(".json").map_err(YamlEditorError::TempFile)?;
-        temp_file
-            .write_all(json_content.as_bytes())
-            .map_err(YamlEditorError::TempFile)?;
-        temp_file.flush().map_err(YamlEditorError::TempFile)?;
+        loop {
+            session.edit()?;
 
-        // Open the temporary file in editor
-        edit::edit_file(temp_file.path()).map_err(YamlEditorError::EditorExecution)?;
-
-        // Read the edited content back from the filesystem
-        let edited_content =
-            std::fs::read_to_string(temp_file.path()).map_err(YamlEditorError::TempFile)?;
-
-        // Parse the edited JSON content
-        let edited_value: Value = serde_json::from_str(&edited_content)?;
-
-        // Check if anything changed
-        if edited_value == self.original_content {
-            return Err(YamlEditorError::NoChanges);
+            match session.try_parse_json() {
+                Ok(edited_value) => {
+                    if edited_value == self.original_content {
+                        return Err(YamlEditorError::NoChanges);
+                    }
+                    return session.save_yaml(&edited_value);
+                }
+                Err(YamlEditorError::JsonDeserialization(json_err)) => {
+                    display_json_error(&json_err);
+                    wait_for_keypress()?;
+                    // Continue loop to retry
+                }
+                Err(other) => return Err(other),
+            }
         }
-
-        // Convert back to YAML and write to original file
-        let yaml_output = serde_yaml::to_string(&edited_value)?;
-        fs::write(&self.file_path, yaml_output).map_err(YamlEditorError::FileIO)?;
-
-        Ok(())
     }
 }
