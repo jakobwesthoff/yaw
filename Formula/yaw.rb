@@ -1,8 +1,8 @@
 class Yaw < Formula
   desc "YAml Without yaml editor"
   homepage "https://github.com/jakobwesthoff/yaw"
-  url "https://github.com/jakobwesthoff/yaw/archive/refs/tags/v1.0.2.tar.gz"
-  sha256 "2ca5ee5e67285ce5442183880456680ff6e2fe7a1d9e6d03a96f36be6dcfa16c" # This will be updated by the action
+  url "https://github.com/jakobwesthoff/yaw/archive/refs/tags/v1.1.0.tar.gz"
+  sha256 "07d624e98b5dd1c9b42cc34bd2d60ee4094781bcd71277b7d97307ba10ae4f1b" # This will be updated by the action
   license "MIT"
 
   depends_on "rust" => :build
