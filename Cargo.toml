@@ -2,7 +2,14 @@
 name = "yaw"
 version = "1.3.0"
 edition = "2024"
+authors = ["Jakob Westhoff <jakob@westhoffswelt.de>"]
+license = "MIT"
 description = "YAML Without YAML editor"
+repository = "https://github.com/jakobwesthoff/yaw"
+homepage = "https://westhoffswelt.de"
+readme = "README.md"
+keywords = ["yaml", "json", "editor", "converter", "cli"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.5.42", features = ["derive"] }
